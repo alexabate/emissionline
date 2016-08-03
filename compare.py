@@ -129,4 +129,5 @@ def all_compare_11(nsample):
 
 	print "4 Emission Line MSE:",errorsum
 	print "Compare Avg Prediction:", meanpred0,meanpred1,meanpred2,meanpred3
+	print "new change"
 
