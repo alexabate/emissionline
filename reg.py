@@ -11,6 +11,8 @@ import sys
 
 """
 An ancillary function which is to normalize the spectra according to Beck's method.
+xhat: wavelength
+yhat: flux
 """
 def norm_rules(xhat, yhat):
 	medlist = [[4250,4300], [4600,4800], [5400,5500], [5600,5800]]
@@ -26,7 +28,11 @@ def norm_rules(xhat, yhat):
 	return yhat
 
 """
-Process the original spectra, seperate the continua and degrade its resolution. Save them into folder spec_proc/
+Process the original spectra in the folder Spectra/, seperate the continua and degrade its resolution. Save them into folder spectra_proc/
+wlinp.txt: wavelength grid to be intepolated. Say, given the SDSS spectra, we may want to intepolate along the wavelength of Brown SEDs.
+galaxy_sample.txt: 13k SDSS galaxies. 
+
+NOTICE: this function is not actually used in this demo, since the Spectra folder is too large. 
 """
 
 def inp_spec():
@@ -68,7 +74,10 @@ def inp_spec():
 		np.savetxt('spectra_proc/'+fsavstr,np.hstack((np.transpose(np.array([xhat])),np.transpose(np.array([yhat])))))
 
 """
-Read the processed continua and save them as one matrix
+Read the processed/nommalized continua in the spectra_proc/ and save them as one matrix: spec_all.txt
+spec_all n*m matrix, n is the number of spectra, m is the flux 
+
+NOTICE: this function is not actually used in this demo. I provide a copy of spec_all.txt directly.
 """
 
 def sum_spec():
@@ -93,40 +102,49 @@ def sum_spec():
 """
 compute the eigenvector for the continua matrix
 save them into mycontPCA.txt
+xmean: mean luminosity
+U,s,V: X = UsV^T, save as s.txt, v.txt
 """
 
 def compute_eig_vec():
 	X = np.loadtxt('spec_all.txt')
+	print 'loading finished'
 	Xorg = X
 	xmean = np.mean(X,axis = 0)
-	np.savetxt('xmean.txt',xmean)
-	print 'loading finished'
 	#centerize
 	X  = X - xmean
-
-	#
 	print 'starting SVD'
 	U,s, V = np.linalg.svd(X, full_matrices=True)
 	print 'finishing'
-	np.savetxt('s.txt',s)
+	#np.savetxt('s.txt',s)
 	#v is the principle direction.
-	np.savetxt('v.txt',V)
+	#np.savetxt('v.txt',V)
 	ndims = 50
-	np.savetxt('5main.txt',np.transpose(V)[:,0:5])
 	proj = np.dot(X,np.transpose(V))
-
 	proj = proj[:,0:ndims]
 	np.savetxt('mycontPCA.txt',proj)
+
+	return proj
+
 
 """
 following 3 functions are used as tools local linear regression. We can also use scipy/sklearn to avoid writing our own.
 """
 
+"""
+Define guassian kernel: exp{(x-x0)^2/2c^2}
+"""
 def k_guassian(x, x0, c, a=1.0):
     dif= x - x0
     return a * np.exp(dif * dif.T/(-2.0 * c**2))
 
 
+"""
+Calculte the weight matrix for between certain datapoint and the inputs data (or, the training data X)
+inputs: n*m matrix, n is the total number of data, m is the dimension of the data
+datapoint: query test datapoint
+weights: returned weight matrix
+"""
 def get_weights(inputs, datapoint, c=1.0):
 	x = np.mat(inputs)
 	n_rows = x.shape[0]
@@ -139,6 +157,14 @@ def get_weights(inputs, datapoint, c=1.0):
 	return weights
 
 
+"""
+Local weighted regressuon function
+training_inputs: training data X
+training_outputs: training data Y
+datapoint: query test datapoint X
+yhat: predicted test datapoint Y
+sumw: not important, just sum of the weights
+"""
 def lwr_fun(training_inputs, training_outputs, datapoint, c=1.0):
     weights = get_weights(training_inputs, datapoint, c=c)
     nn = weights.shape[0]
@@ -164,9 +190,14 @@ def lwr_fun(training_inputs, training_outputs, datapoint, c=1.0):
 
     return yhat,sumw
 
+
 """
 main function for regression.
 galaxy_sample.txt: a file provided by Beck which gives the logEW for SDSS galaxies
+est_ems.txt: estimation for the emission lines
+real_ems.txt: real value for the emission lines
+test_ems.txt: Beck's estimation for the emission lines, use as a sanity check 
+estwt.txt: not important, saved weight
 """
 
 def main():
@@ -174,7 +205,7 @@ def main():
 	datadir = 'galaxy_sample.txt'
 	subsample = read_file(datadir, cols)
 	inds = 19 + 4*np.arange(10)
-	contPCA = np.loadtxt('mycontPCA.txt')
+	contPCA = compute_eig_vec()
 	contPCA = contPCA[:,0:5]
 
 	tempPCA = np.ones((contPCA.shape[0],contPCA.shape[1]+1))
@@ -202,7 +233,6 @@ def main():
 	np.savetxt('est_ems.txt',estem)
 	np.savetxt('real_ems.txt',ems)
 	np.savetxt('test_ems.txt',testem)
-	np.savetxt('estwt.txt',estwt)
 	print np.mean(estwt)
 
 
@@ -212,9 +242,8 @@ def main():
 if __name__ == '__main__':
 	datadir = 'galaxy_sample.txt'
 	nsample = len(read_file(datadir, [1]))
-
-	compute_eig_vec()
 	main()
+	#plot the emission line comparison and BPT diagram
 	all_compare_11(nsample)
 
 
